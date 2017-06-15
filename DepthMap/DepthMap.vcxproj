@@ -110,8 +110,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets" Condition="Exists('..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets')" />
+    <Import Project="..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets" Condition="Exists('..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>此專案參考這部電腦上所缺少的 NuGet 封裝。請啟用 NuGet 封裝還原，以下載該封裝。如需詳細資訊，請參閱 http://go.microsoft.com/fwlink/?LinkID=322105。缺少的檔案是 {0}。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets'))" />
+    <Error Condition="!Exists('..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets'))" />
+  </Target>
 </Project>
