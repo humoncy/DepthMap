@@ -8,9 +8,10 @@ using namespace std;
 using namespace cv;
 
 const int WINDOW_SIZE = 11; // should be even
-const int LEVEL = 6;
+const int LEVEL = 10;
 
 void blockMatching(Mat SrcImg1, Mat SrcImg2, Mat& DisparityMap);
+void fasterblockMatching(Mat SrcImg1, Mat SrcImg2, Mat& DisparityMap);
 void imageShowTesting(Mat& DisparityMap);
 
 int main() {
@@ -38,7 +39,16 @@ int main() {
 	Mat DisparityMap(SrcImg1.rows, SrcImg1.cols, CV_8UC1, Scalar(0));
 
 	//imageShowTesting(DisparityMap);
-	blockMatching(SrcImg1, SrcImg2, DisparityMap);
+	//blockMatching(SrcImg1, SrcImg2, DisparityMap);
+	fasterblockMatching(SrcImg1, SrcImg2, DisparityMap);
+
+	// visualization
+	for (int rowIndex = 0; rowIndex < SrcImg1.rows; rowIndex++) {
+		for (int colIndex = 0; colIndex < SrcImg1.cols; colIndex++) {
+			int which_level = (float)DisparityMap.at<uchar>(rowIndex, colIndex) / (255.0 / LEVEL);
+			DisparityMap.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
+		}
+	}
 
 	imshow("Disparity Map", DisparityMap);
 	imwrite("Resources/tsukuba/disparity map.jpg", DisparityMap);
@@ -56,11 +66,11 @@ int main() {
 
 void blockMatching(Mat SrcImg1, Mat SrcImg2, Mat & DisparityMap)
 {
-	Mat original_disparitiy(SrcImg1.rows, SrcImg1.cols, CV_32S, Scalar(0));
+	Mat original_disparitiy(DisparityMap.rows, DisparityMap.cols, CV_32S, Scalar(0));
 
 	int m = ( WINDOW_SIZE - 1 ) / 2;
-	for (int rowIndex = m; rowIndex < SrcImg1.rows - m - 1; rowIndex++) {
-		for (int colIndex = m; colIndex < SrcImg1.cols - m - 1; colIndex++) {
+	for (int rowIndex = m; rowIndex < DisparityMap.rows - m - 1; rowIndex++) {
+		for (int colIndex = m; colIndex < DisparityMap.cols - m - 1; colIndex++) {
 			int min_ssd = std::numeric_limits<int>::max();
 
 			int search_start = colIndex > 80 ? colIndex - 50 : m;
@@ -86,18 +96,56 @@ void blockMatching(Mat SrcImg1, Mat SrcImg2, Mat & DisparityMap)
 
 	//Mat normalized_original_disparitiy(SrcImg1.rows, SrcImg1.cols, CV_32FC1, Scalar(0));
 	normalize(original_disparitiy, original_disparitiy, 0.0, 255.0, NORM_MINMAX);
-	original_disparitiy.convertTo(original_disparitiy, CV_8U, 1.0, 0);
-	imshow("TEST", original_disparitiy);
-	
-	DisparityMap = original_disparitiy;
+	original_disparitiy.convertTo(DisparityMap, CV_8U, 1.0, 0);
+	imshow("TEST", DisparityMap);
+}
 
-	// visualization
-	/*for (int rowIndex = 0; rowIndex < SrcImg1.rows; rowIndex++) {
-		for (int colIndex = 0; colIndex < SrcImg1.cols; colIndex++) {
-			int which_level = (float)original_disparitiy.at<uchar>(rowIndex, colIndex) / (255.0 / LEVEL);
-			DisparityMap.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
+void fasterblockMatching(Mat SrcImg1, Mat SrcImg2, Mat & DisparityMap)
+{
+	Mat original_disparitiy(DisparityMap.rows, DisparityMap.cols, CV_32S, Scalar(0));
+	Mat min_ssd(DisparityMap.rows, DisparityMap.cols, CV_32S, Scalar(std::numeric_limits<int>::max()));
+
+	int m = (WINDOW_SIZE - 1) / 2;
+	int threashold = 20;
+
+	for (int d = 0; d < threashold; d++) {
+		Mat integral_ssd(DisparityMap.rows, DisparityMap.cols, CV_32S, Scalar(0));
+
+		for (int rowIndex = 0; rowIndex < DisparityMap.rows; rowIndex++) {
+			int sum = 0;
+			for (int colIndex = d; colIndex < DisparityMap.cols; colIndex++) {
+				sum += pow( (int)SrcImg1.at<uchar>(rowIndex, colIndex) - (int)SrcImg2.at<uchar>(rowIndex, colIndex - d), 2.0 );
+				if (rowIndex == 0) {
+					integral_ssd.at<int>(rowIndex, colIndex) = sum;
+				}
+				else {
+					integral_ssd.at<int>(rowIndex, colIndex) = integral_ssd.at<int>(rowIndex - 1, colIndex) + sum;
+				}
+			}
 		}
-	}*/
+
+		// ignore some margin
+		for (int rowIndex = m + 1; rowIndex < DisparityMap.rows - m - 1; rowIndex++) {
+			for (int colIndex = m + 1; colIndex < DisparityMap.cols - m - 1; colIndex++) {
+				int ssd = integral_ssd.at<int>(rowIndex + m, colIndex + m) - integral_ssd.at<int>(rowIndex + m, colIndex - m - 1) - integral_ssd.at<int>(rowIndex - m - 1, colIndex + m) + integral_ssd.at<int>(rowIndex - m - 1, colIndex - m - 1);
+				if (ssd < min_ssd.at<int>(rowIndex, colIndex) && ssd != 0) {
+					min_ssd.at<int>(rowIndex, colIndex) = ssd;
+					original_disparitiy.at<int>(rowIndex, colIndex) = d;
+				}
+			}
+		}
+	}
+
+	for (int rowIndex = m; rowIndex < DisparityMap.rows - m - 1; rowIndex++) {
+		for (int colIndex = m ; colIndex < threashold; colIndex++) {
+			original_disparitiy.at<int>(rowIndex, colIndex) = original_disparitiy.at<int>(rowIndex, threashold);
+		}
+	}
+
+	//Mat normalized_original_disparitiy(SrcImg1.rows, SrcImg1.cols, CV_32FC1, Scalar(0));
+	normalize(original_disparitiy, original_disparitiy, 0.0, 255.0, NORM_MINMAX);
+	original_disparitiy.convertTo(DisparityMap, CV_8U, 1.0, 0);
+	imshow("TEST", DisparityMap);
 }
 
 void imageShowTesting(Mat & DisparityMap)
@@ -116,6 +164,9 @@ void imageShowTesting(Mat & DisparityMap)
 	int x = temp * 255.0;
 	cout << x << endl;*/
 	//cout << abs(-255.0);
+	
+	Mat mat2(2, 2, CV_32S, Scalar(std::numeric_limits<int>::max()));
+	cout << mat2 << endl;
 
 	Mat original_disparitiy(DisparityMap.rows, DisparityMap.cols, CV_32S, Scalar(0));
 
