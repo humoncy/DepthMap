@@ -12,6 +12,7 @@ const int LEVEL = 10;
 
 void blockMatching(Mat SrcImg1, Mat SrcImg2, Mat& DisparityMap);
 void fasterblockMatching(Mat SrcImg1, Mat SrcImg2, Mat& DisparityMap);
+void semi_global_matching(Mat SrcImg1, Mat SrcImg2);
 void imageShowTesting(Mat& DisparityMap);
 
 int main() {
