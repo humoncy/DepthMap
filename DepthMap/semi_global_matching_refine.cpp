@@ -25,6 +25,16 @@ struct path {
 	short index;
 };
 
+inline uchar getMatElement(Mat &matrix, int i, int j) {
+	assert(matrix.type() == CV_8UC1);
+	if (i < 0 || i >= matrix.rows || j < 0 || j >= matrix.cols) {
+		return 0;
+	}
+	else {
+		return matrix.at<uchar>(i, j);
+	}
+}
+
 // for debug
 void printArray(unsigned short ***array, int rows, int cols, int depth) {
 	for (int d = 0; d < depth; ++d) {
@@ -38,7 +48,7 @@ void printArray(unsigned short ***array, int rows, int cols, int depth) {
 	}
 }
 
-unsigned short calculatePixelCostOneWayBT(int row, int leftCol, int rightCol, const cv::Mat &leftImage, const cv::Mat &rightImage) {
+unsigned short calculatePixelCostOneWayBT(int row, int leftCol, int rightCol, const Mat &leftImage, const Mat &rightImage) {
 
 	char leftValue, rightValue, beforeRightValue, afterRightValue, rightValueMinus, rightValuePlus, rightValueMin, rightValueMax;
 
@@ -76,12 +86,12 @@ unsigned short calculatePixelCostOneWayBT(int row, int leftCol, int rightCol, co
 	return max(0, max((leftValue - rightValueMax), (rightValueMin - leftValue)));
 }
 
-inline unsigned short calculatePixelCostBT(int row, int leftCol, int rightCol, const cv::Mat &leftImage, const cv::Mat &rightImage) {
+inline unsigned short calculatePixelCostBT(int row, int leftCol, int rightCol, const Mat &leftImage, const Mat &rightImage) {
 	return min(calculatePixelCostOneWayBT(row, leftCol, rightCol, leftImage, rightImage),
 		calculatePixelCostOneWayBT(row, rightCol, leftCol, rightImage, leftImage));
 }
 
-void calculatePixelCost(cv::Mat &firstImage, cv::Mat &secondImage, int disparityRange, unsigned short ***C) 
+void calculatePixelCost(Mat &firstImage, Mat &secondImage, int disparityRange, unsigned short ***C)
 {
 	for (int row = 0; row < firstImage.rows; ++row) {
 		for (int col = 0; col < firstImage.cols; ++col) {
@@ -284,7 +294,7 @@ void aggregateCosts(int rows, int cols, int disparityRange, unsigned short ***C,
 	}
 }
 
-void computeDisparity(unsigned short ***S, int rows, int cols, int disparityRange, cv::Mat &disparityMap) {
+void computeDisparity(unsigned short ***S, int rows, int cols, int disparityRange, Mat &disparityMap) {
 	unsigned int disparity = 0, minCost;
 	for (int row = 0; row < rows; ++row) {
 		for (int col = 0; col < cols; ++col) {
@@ -300,14 +310,54 @@ void computeDisparity(unsigned short ***S, int rows, int cols, int disparityRang
 	}
 }
 
-void saveDisparityMap(cv::Mat &disparityMap, int disparityRange, char* outputFile) {
+void saveDisparityMap(Mat &disparityMap, int disparityRange, char* outputFile) {
 	double factor = 256.0 / disparityRange;
 	for (int row = 0; row < disparityMap.rows; ++row) {
 		for (int col = 0; col < disparityMap.cols; ++col) {
 			disparityMap.at<uchar>(row, col) *= factor;
 		}
 	}
-	cv::imwrite(outputFile, disparityMap);
+	imwrite(outputFile, disparityMap);
+}
+float mean(Mat disparityMap)
+{
+	float tmp = 0.0;
+	for (int i = 0; i < disparityMap.rows; i++) {
+		for (int j = 0; j < disparityMap.cols; j++) {
+			tmp += disparityMap.at<uchar>(i, j);
+		}
+	}
+	tmp /= (disparityMap.rows*disparityMap.cols);
+	return tmp;
+}
+//∫‚DG
+float calculateGradient(float dx, float dy, Mat DisparityMap, float d1)
+{
+
+	float d2 = getMatElement(DisparityMap, dx, dy);
+	float DG = ((abs(d2 - d1)) / abs((1 + (d2 - d1) / 2)));
+	return DG;
+}
+float filterblurpoint(Mat newimage, int i, int j, int filtersize) {
+	int filter = (filtersize - 1) / 2;
+	float tmp = 0.0;
+	for (int a = -filter; a <= filter; a++) {
+		for (int b = -filter; b <= filter; b++) {
+			tmp += (float)getMatElement(newimage, i + a, j + b);
+		}
+	}
+	return tmp / (filtersize*filtersize);
+}
+
+float filterblurpointRGB(Mat newimage, int i, int j, int filtersize, int color) {
+	int filter = (filtersize - 1) / 2;
+	float tmp = 0.0;
+	for (int a = -filter; a <= filter; a++) {
+		for (int b = -filter; b <= filter; b++) {
+			tmp += (float)getMatElement(newimage, i + a, j + b);
+		}
+	}
+	return tmp / (filtersize*filtersize);
 }
 
 int main() {
@@ -315,16 +365,16 @@ int main() {
 	Mat secondImage = imread("Resources/tsukuba/scene1.row3.col2.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 
 
+
 	if (!firstImage.data || !secondImage.data) {
 		cerr << "Could not open or find one of the images!" << endl;
 		return -1;
 	}
 
-	unsigned int disparityRange = 20;
+	unsigned int disparityRange = 25;
 	unsigned short ***C; // pixel cost array W x H x D
 	unsigned short ***S; // aggregated cost array W x H x D
 	unsigned short ****A; // single path cost array PATHS_PER_SCAN x W x H x D
-
 						  /*
 						  * TODO
 						  * variable LARGE_PENALTY
@@ -373,7 +423,7 @@ int main() {
 	cout << "Aggregating costs..." << endl;
 	aggregateCosts(firstImage.rows, firstImage.cols, disparityRange, C, A, S);
 
-	cv::Mat disparityMap = cv::Mat(cv::Size(firstImage.cols, firstImage.rows), CV_8UC1, cv::Scalar::all(0));
+	Mat disparityMap = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
 
 	cout << "Computing disparity..." << endl;
 	computeDisparity(S, firstImage.rows, firstImage.cols, disparityRange, disparityMap);
@@ -384,9 +434,126 @@ int main() {
 	printf("Done in %.2lf seconds.\n", elapsed_secs);
 
 	char * outFileName = "Resources/tsukuba/disparity map sgm.jpg";
+	//Refinement the steroe image
+	//Mat Refinement = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
+	Mat Refinement = disparityMap.clone();
+	float disimg_mean = mean(disparityMap);
+	int threshold = 1.8;//disparity gradient limit
+	for (int i = 0; i < disparityMap.rows - 1; ++i) {
+		for (int j = 0; j < disparityMap.cols - 1; ++j) {
+			float d1 = disparityMap.at<uchar>(i, j);//the current disparity
+			float up, down, right, left;//save the gradient
+			left = calculateGradient(i - 1, j, disparityMap, d1);
+			right = calculateGradient(i + 1, j, disparityMap, d1);
+			up = calculateGradient(i, j - 1, disparityMap, d1);
+			down = calculateGradient(i, j + 1, disparityMap, d1);
+			if (left > threshold)//check the gradient
+			{
+				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i - 1, j) - disimg_mean))
+				{
+					Refinement.at<uchar>(i - 1, j) = d1;
+				}
+				else d1 = disparityMap.at<uchar>(i - 1, j);
+			}
+			if (up > threshold)
+			{
+				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i, j - 1) - disimg_mean))
+				{
+					Refinement.at<uchar>(i, j - 1) = d1;
+				}
+				else d1 = disparityMap.at<uchar>(i, j - 1);
+			}
+			if (right > threshold)
+			{
+				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i + 1, j) - disimg_mean))
+				{
+					Refinement.at<uchar>(i + 1, j) = d1;
+				}
+				else d1 = disparityMap.at<uchar>(i + 1, j);
+			}
+			if (down > threshold)
+			{
+				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i, j + 1) - disimg_mean))
+				{
+					Refinement.at<uchar>(i, j + 1) = d1;
+				}
+				else d1 = (float)disparityMap.at<uchar>(i, j + 1);
+			}
+			//Refinement.at<uchar>(i, j) = d1;
+		}
+	}
+
+	saveDisparityMap(Refinement, disparityRange, "Resources/tsukuba/refinement map sgm.jpg");
+	imshow("refinement", Refinement);
+	medianBlur(Refinement, Refinement, 3);
+	imshow("refinement_median", Refinement);
+
 	saveDisparityMap(disparityMap, disparityRange, outFileName);
-	
 	imshow("Disparity Map", disparityMap);
+
+	Mat check = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
+	for (int i = 0; i < disparityMap.rows; i++) {
+		for (int j = 0; j < disparityMap.cols; j++) {
+			check.at<uchar>(i, j) = abs((float)Refinement.at<uchar>(i, j) - (float)disparityMap.at<uchar>(i, j));
+		}
+	}
+	imshow("check", check);
+
+	//¥∫≤`for gray image
+	Mat newimage = firstImage.clone();
+	//Mat checknew = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
+	//Mat checknew = firstImage.clone();
+	for (int i = 0; i < disparityMap.rows; i++) {
+		for (int j = 0; j < disparityMap.cols; j++) {
+			if ((float)Refinement.at<uchar>(i, j) <= 80)
+			{
+				//checknew.at<uchar>(i, j) = newimage.at<uchar>(i, j);
+				newimage.at<uchar>(i, j) = filterblurpoint(newimage, i, j, 5);
+			}
+			if ((float)Refinement.at<uchar>(i, j) > 80 && (float)Refinement.at<uchar>(i, j) <= 100)
+			{
+				//checknew.at<uchar>(i, j) = newimage.at<uchar>(i, j);
+				newimage.at<uchar>(i, j) = filterblurpoint(newimage, i, j, 3);
+			}
+			//if ((float)Refinement.at<uchar>(i, j) <= 100)
+			//{
+			//	checknew.at<uchar>(i, j) = filterblurpoint(newimage, i, j, 5);
+			//}
+		}
+		cout << endl;
+	}
+	imshow("sense", newimage);
+	Mat color_img = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_COLOR);
+	for (int i = 0; i < disparityMap.rows; i++) {
+		for (int j = 0; j < disparityMap.cols; j++) {
+			if ((float)Refinement.at<uchar>(i, j) <= 80)
+			{
+				color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 5);
+				color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 5);
+				color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 5);
+
+			}
+			if ((float)Refinement.at<uchar>(i, j) > 80 && (float)Refinement.at<uchar>(i, j) <= 100)
+			{
+				color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 3);
+				color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 3);
+				color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 3);
+			}
+		}
+		cout << endl;
+	}
+	imshow("color_img", color_img);
+	//imshow("checknew", checknew);
+	//for (int i = 0; i < disparityMap.rows; i++) {
+	//	for (int j = 0; j < disparityMap.cols; j++) {
+	//		if ((float)disparityMap.at<uchar>(i, j) == 0)
+	//		{
+	//			cout << (float)disparityMap.at<uchar>(i, j) << " ";
+	//		}
+	//	}
+	//	cout << endl;
+	//}
+
 	waitKey(0);
 	return 0;
 }
