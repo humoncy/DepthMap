@@ -12,6 +12,7 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include "gaussian.h"
 #include "postprocessing.h"
+#include "stereomatching.h"
 
 #define BLUR_RADIUS 3
 #define PATHS_PER_SCAN 8
@@ -22,6 +23,8 @@
 #define CV_EVENT_LBUTTONDOWN 1 
 #define CV_EVENT_RBUTTONDOWN 2     
 #define LEVEL 30
+
+const int WINDOW_SIZE = 7; // should be odd
 
 using namespace std;
 using namespace cv;
@@ -355,7 +358,7 @@ void onMouse(int event, int x, int y, int flag, void* param) {
 		int disparity = disparity_mouse.at<uchar>(y, x);//剛好row col與x y相反
 		cout << x << " " << y << " " << (float)disparity_mouse.at<uchar>(y, x) << endl;
 		depthOfFieldColorchange(color_img_mouse, color_img_mouse_tmp, disparity_mouse, disparity);
-		imshow("color_img_mouse", color_img_mouse_tmp);
+		imshow("Depth of Field (Mouse)", color_img_mouse_tmp);
 	}
 }
 
@@ -445,7 +448,7 @@ int main() {
 	clock_t end = clock();
 	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
 
-	printf("Done in %.2lf seconds.\n", elapsed_secs);
+	printf("SGM done in %.2lf seconds.\n", elapsed_secs);
 
 	char * outFileName = "Resources/tsukuba/disparity map sgm.jpg";
 
@@ -453,17 +456,16 @@ int main() {
 	//Mat Refinement = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
 	Mat refinement_disparitymap = disparityMap.clone();
 	const int threshold = 1.8;//disparity gradient limit
-
 	disparityRefinement(disparityMap, refinement_disparitymap, threshold);
 
-	saveDisparityMap(refinement_disparitymap, disparityRange, "Resources/tsukuba/refinement map sgm.jpg");
-	imshow("refinement", refinement_disparitymap);
-	medianBlur(refinement_disparitymap, refinement_disparitymap, 3);
-	imshow("refinement_median", refinement_disparitymap);
-
 	saveDisparityMap(disparityMap, disparityRange, outFileName);
-	imshow("Disparity Map", disparityMap);
+	imshow("Disparity Map SGM", disparityMap);
+	saveDisparityMap(refinement_disparitymap, disparityRange, "Resources/tsukuba/refinement map sgm.jpg");
+	//imshow("refinement", refinement_disparitymap);
+	medianBlur(refinement_disparitymap, refinement_disparitymap, 3);
+	imshow("Disparity Map SGM after Refinement", refinement_disparitymap);
 
+	// checking refinements
 	/*Mat check = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
 	for (int i = 0; i < disparityMap.rows; i++) {
 		for (int j = 0; j < disparityMap.cols; j++) {
@@ -473,27 +475,45 @@ int main() {
 	imshow("check", check);*/
 
 	// depth of field for gray image
-	Mat newimage = firstImage.clone();
-	depthOfField(newimage, newimage, refinement_disparitymap);
-	
+	//Mat dof_gray = firstImage.clone();
+	//depthOfField(dof_gray, dof_gray, refinement_disparitymap);
+	//imshow("Depth of Field (gray)", dof_gray);
+
+	//Mat DisparityMap_BM(firstImage.rows, firstImage.cols, CV_8UC1, Scalar(0));
+	Mat DisparityMap2_FBM(firstImage.rows, firstImage.cols, CV_8UC1, Scalar(0));
+	Mat DisparityMap3_DP(firstImage.rows, firstImage.cols, CV_8UC1, Scalar(0));
+
+	begin = clock();
+
+	//blockMatching(WINDOW_SIZE, firstImage, secondImage, DisparityMap_BM);
+	fasterblockMatching(WINDOW_SIZE, firstImage, secondImage, DisparityMap2_FBM);
+	matchingDP(WINDOW_SIZE, firstImage, secondImage, DisparityMap3_DP);
+	medianBlur(DisparityMap2_FBM, DisparityMap2_FBM, 5);
+	medianBlur(DisparityMap3_DP, DisparityMap3_DP, 5);
+
+	end = clock();
+	elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+	printf("DP done in %.2lf seconds.\n", elapsed_secs);
+
+	imshow("Disparity Map Block Matching", DisparityMap2_FBM);
+	imshow("Disparity Map Dynamic Programming", DisparityMap3_DP);
+
 	Mat color_img = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_COLOR);
 	Mat dofColor = color_img.clone();
 	depthOfFieldColor(color_img, dofColor, refinement_disparitymap);
-	
 	imshow("Depth of Field", dofColor);
 
 
 	disparity_mouse = refinement_disparitymap.clone();
-	cvNamedWindow("color_img_mouse", 1);
-	cvResizeWindow("Show Image", color_img.cols, color_img.rows);
+	cvNamedWindow("Depth of Field (Mouse)", 1);
+	cvResizeWindow("Depth of Field (Mouse)", color_img.cols, color_img.rows);
 	//for mouse event
-	cvSetMouseCallback("color_img_mouse", onMouse, NULL);//設定滑鼠callback函式，改變disparity map 的景深影像
-	imshow("color_img_mouse", color_img_mouse);
+	cvSetMouseCallback("Depth of Field (Mouse)", onMouse, NULL);//設定滑鼠callback函式，改變disparity map 的景深影像
+	imshow("Depth of Field (Mouse)", color_img_mouse);
 	for (int rowIndex = 0; rowIndex < firstImage.rows; rowIndex++) {
 		for (int colIndex = 0; colIndex < secondImage.cols; colIndex++) {
 			int which_level = (float)disparity_mouse.at<uchar>(rowIndex, colIndex) / (255.0 / LEVEL);
 			disparity_mouse.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
-			//DisparityMap2.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
 		}
 	}
 	imshow("disparity_mouse", disparity_mouse);
@@ -506,13 +526,10 @@ int main() {
 		}
 	}
 
-
 	string animationDir = "./Resources/maple_leaves/";
 	vector<string> files = vector<string>();
 	getdir(animationDir, files);
 	droppingleaves(color_img, animationDir, files, refinement_disparitymap);
-
-	//imshow("sense", newimage);
 
 	//waitKey(0);
 	return 0;

@@ -112,7 +112,7 @@
   <ItemGroup>
     <ClCompile Include="gaussian.cpp" />
     <ClCompile Include="postprocessing.cpp" />
-    <ClCompile Include="Source.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="stereomatching.cpp" />
   </ItemGroup>
   <ItemGroup>

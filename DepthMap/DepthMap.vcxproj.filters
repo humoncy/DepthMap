@@ -21,11 +21,11 @@
     <ClCompile Include="postprocessing.cpp">
       <Filter>資源檔</Filter>
     </ClCompile>
-    <ClCompile Include="Source.cpp">
-      <Filter>原始程式檔</Filter>
-    </ClCompile>
     <ClCompile Include="stereomatching.cpp">
       <Filter>資源檔</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>原始程式檔</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

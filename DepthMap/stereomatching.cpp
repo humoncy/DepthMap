@@ -101,7 +101,6 @@ void fasterblockMatching(int windowsize, Mat SrcImg1, Mat SrcImg2, Mat & Dispari
 
 	normalize(original_disparitiy, original_disparitiy, 0.0, 255.0, NORM_MINMAX);
 	original_disparitiy.convertTo(DisparityMap, CV_8U, 1.0, 0);
-	imshow("TEST", DisparityMap);
 }
 
 void matchingDP(int windowsize, Mat SrcImg1, Mat SrcImg2, Mat & DisparityMap)
