@@ -113,6 +113,7 @@
     <ClCompile Include="gaussian.cpp" />
     <ClCompile Include="postprocessing.cpp" />
     <ClCompile Include="Source.cpp" />
+    <ClCompile Include="stereomatching.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -120,6 +121,7 @@
   <ItemGroup>
     <ClInclude Include="gaussian.h" />
     <ClInclude Include="postprocessing.h" />
+    <ClInclude Include="stereomatching.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
