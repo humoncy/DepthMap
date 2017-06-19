@@ -11,7 +11,7 @@ using namespace cv;
 #define DISPARITY_RANGE 20
 #define INT_MAX std::numeric_limits<int>::max();
 
-const int WINDOW_SIZE = 11; // should be even
+const int WINDOW_SIZE = 7; // should be odd
 const int LEVEL = 10;
 
 void blockMatching(int windowsize, Mat SrcImg1, Mat SrcImg2, Mat& DisparityMap);

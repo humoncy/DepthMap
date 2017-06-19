@@ -112,7 +112,7 @@
   <ItemGroup>
     <ClCompile Include="gaussian.cpp" />
     <ClCompile Include="postprocessing.cpp" />
-    <ClCompile Include="semi_global_matching_refine.cpp" />
+    <ClCompile Include="Source.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
