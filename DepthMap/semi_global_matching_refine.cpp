@@ -4,10 +4,14 @@
 #include <cmath>
 #include <ctime>
 #include <limits>
+#include <Windows.h>
+#include <dirent.h>
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include "opencv2/imgproc/imgproc.hpp"
 #include "gaussian.h"
+#include "postprocessing.h"
 
 #define BLUR_RADIUS 3
 #define PATHS_PER_SCAN 8
@@ -15,6 +19,9 @@
 #define SMALL_PENALTY 3
 #define LARGE_PENALTY 30
 #define DEBUG false
+#define CV_EVENT_LBUTTONDOWN 1 
+#define CV_EVENT_RBUTTONDOWN 2     
+#define LEVEL 30
 
 using namespace std;
 using namespace cv;
@@ -319,45 +326,51 @@ void saveDisparityMap(Mat &disparityMap, int disparityRange, char* outputFile) {
 	}
 	imwrite(outputFile, disparityMap);
 }
-float mean(Mat disparityMap)
+
+
+
+
+void depthOfFieldColorchange(cv::Mat & SrcImg, cv::Mat & DstImg, cv::Mat & disparityMap, int disparity)
 {
-	float tmp = 0.0;
 	for (int i = 0; i < disparityMap.rows; i++) {
 		for (int j = 0; j < disparityMap.cols; j++) {
-			tmp += disparityMap.at<uchar>(i, j);
+			//if ((float)disparityMap.at<uchar>(i, j) < disparity-8 || (float)disparityMap.at<uchar>(i, j) > disparity + 8)
+			if ((float)disparityMap.at<uchar>(i, j) != disparity)
+			{
+				DstImg.at<Vec3b>(i, j)[0] = filterblurpointRGB(SrcImg, i, j, 5, 0);
+				DstImg.at<Vec3b>(i, j)[1] = filterblurpointRGB(SrcImg, i, j, 5, 1);
+				DstImg.at<Vec3b>(i, j)[2] = filterblurpointRGB(SrcImg, i, j, 5, 2);
+			}
 		}
 	}
-	tmp /= (disparityMap.rows*disparityMap.cols);
-	return tmp;
-}
-//算DG
-float calculateGradient(float dx, float dy, Mat DisparityMap, float d1)
-{
-
-	float d2 = getMatElement(DisparityMap, dx, dy);
-	float DG = ((abs(d2 - d1)) / abs((1 + (d2 - d1) / 2)));
-	return DG;
-}
-float filterblurpoint(Mat newimage, int i, int j, int filtersize) {
-	int filter = (filtersize - 1) / 2;
-	float tmp = 0.0;
-	for (int a = -filter; a <= filter; a++) {
-		for (int b = -filter; b <= filter; b++) {
-			tmp += (float)getMatElement(newimage, i + a, j + b);
-		}
-	}
-	return tmp / (filtersize*filtersize);
 }
 
-float filterblurpointRGB(Mat newimage, int i, int j, int filtersize, int color) {
-	int filter = (filtersize - 1) / 2;
-	float tmp = 0.0;
-	for (int a = -filter; a <= filter; a++) {
-		for (int b = -filter; b <= filter; b++) {
-			tmp += (float)getMatElement(newimage, i + a, j + b);
-		}
+CvPoint VertexOne;
+Mat color_img_mouse = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_COLOR);
+Mat disparity_mouse = Mat(Size(color_img_mouse.cols, color_img_mouse.rows), CV_8UC1, Scalar::all(0));
+void onMouse(int event, int x, int y, int flag, void* param) {
+	Mat color_img_mouse_tmp = color_img_mouse.clone();
+	if (event == 1) {//按左鍵
+		VertexOne = cvPoint(x, y);
+		int disparity = disparity_mouse.at<uchar>(y, x);//剛好row col與x y相反
+		cout << x << " " << y << " " << (float)disparity_mouse.at<uchar>(y, x) << endl;
+		depthOfFieldColorchange(color_img_mouse, color_img_mouse_tmp, disparity_mouse, disparity);
+		imshow("color_img_mouse", color_img_mouse_tmp);
 	}
-	return tmp / (filtersize*filtersize);
+}
+
+int getdir(string dir, vector<string> &files) {
+	DIR *dp;//創立資料夾指標
+	struct dirent *dirp;
+	if ((dp = opendir(dir.c_str())) == NULL) {
+		cout << "Error(" << errno << ") opening " << dir << endl;
+		return errno;
+	}
+	while ((dirp = readdir(dp)) != NULL) {//如果dirent指標非空
+		files.push_back(string(dirp->d_name));//將資料夾和檔案名放入vector
+	}
+	closedir(dp);//關閉資料夾指標
+	return 0;
 }
 
 int main() {
@@ -435,127 +448,72 @@ int main() {
 	printf("Done in %.2lf seconds.\n", elapsed_secs);
 
 	char * outFileName = "Resources/tsukuba/disparity map sgm.jpg";
+
 	//Refinement the steroe image
 	//Mat Refinement = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
-	Mat Refinement = disparityMap.clone();
-	float disimg_mean = mean(disparityMap);
-	int threshold = 1.8;//disparity gradient limit
-	for (int i = 1; i < disparityMap.rows - 1; ++i) {
-		for (int j = 1; j < disparityMap.cols - 1; ++j) {
-			float d1 = disparityMap.at<uchar>(i, j);//the current disparity
-			float up, down, right, left;//save the gradient
-			left = calculateGradient(i - 1, j, disparityMap, d1);
-			right = calculateGradient(i + 1, j, disparityMap, d1);
-			up = calculateGradient(i, j - 1, disparityMap, d1);
-			down = calculateGradient(i, j + 1, disparityMap, d1);
-			if (left > threshold)//check the gradient
-			{
-				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i - 1, j) - disimg_mean))
-				{
-					Refinement.at<uchar>(i - 1, j) = d1;
-				}
-				else d1 = disparityMap.at<uchar>(i - 1, j);
-			}
-			if (up > threshold)
-			{
-				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i, j - 1) - disimg_mean))
-				{
-					Refinement.at<uchar>(i, j - 1) = d1;
-				}
-				else d1 = disparityMap.at<uchar>(i, j - 1);
-			}
-			if (right > threshold)
-			{
-				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i + 1, j) - disimg_mean))
-				{
-					Refinement.at<uchar>(i + 1, j) = d1;
-				}
-				else d1 = disparityMap.at<uchar>(i + 1, j);
-			}
-			if (down > threshold)
-			{
-				if (abs(d1 - disimg_mean) < abs((float)disparityMap.at<uchar>(i, j + 1) - disimg_mean))
-				{
-					Refinement.at<uchar>(i, j + 1) = d1;
-				}
-				else d1 = (float)disparityMap.at<uchar>(i, j + 1);
-			}
-			//Refinement.at<uchar>(i, j) = d1;
-		}
-	}
+	Mat refinement_disparitymap = disparityMap.clone();
+	const int threshold = 1.8;//disparity gradient limit
 
-	saveDisparityMap(Refinement, disparityRange, "Resources/tsukuba/refinement map sgm.jpg");
-	imshow("refinement", Refinement);
-	medianBlur(Refinement, Refinement, 3);
-	imshow("refinement_median", Refinement);
+	disparityRefinement(disparityMap, refinement_disparitymap, threshold);
+
+	saveDisparityMap(refinement_disparitymap, disparityRange, "Resources/tsukuba/refinement map sgm.jpg");
+	imshow("refinement", refinement_disparitymap);
+	medianBlur(refinement_disparitymap, refinement_disparitymap, 3);
+	imshow("refinement_median", refinement_disparitymap);
 
 	saveDisparityMap(disparityMap, disparityRange, outFileName);
 	imshow("Disparity Map", disparityMap);
 
-	Mat check = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
+	/*Mat check = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
 	for (int i = 0; i < disparityMap.rows; i++) {
 		for (int j = 0; j < disparityMap.cols; j++) {
-			check.at<uchar>(i, j) = abs((float)Refinement.at<uchar>(i, j) - (float)disparityMap.at<uchar>(i, j));
+			check.at<uchar>(i, j) = abs((float)refinement_disparitymap.at<uchar>(i, j) - (float)disparityMap.at<uchar>(i, j));
 		}
 	}
-	imshow("check", check);
+	imshow("check", check);*/
 
-	//景深for gray image
+	// depth of field for gray image
 	Mat newimage = firstImage.clone();
-	//Mat checknew = Mat(Size(firstImage.cols, firstImage.rows), CV_8UC1, Scalar::all(0));
-	//Mat checknew = firstImage.clone();
-	for (int i = 0; i < disparityMap.rows; i++) {
-		for (int j = 0; j < disparityMap.cols; j++) {
-			if ((float)Refinement.at<uchar>(i, j) <= 80)
-			{
-				//checknew.at<uchar>(i, j) = newimage.at<uchar>(i, j);
-				newimage.at<uchar>(i, j) = filterblurpoint(newimage, i, j, 5);
-			}
-			if ((float)Refinement.at<uchar>(i, j) > 80 && (float)Refinement.at<uchar>(i, j) <= 100)
-			{
-				//checknew.at<uchar>(i, j) = newimage.at<uchar>(i, j);
-				newimage.at<uchar>(i, j) = filterblurpoint(newimage, i, j, 3);
-			}
-			//if ((float)Refinement.at<uchar>(i, j) <= 100)
-			//{
-			//	checknew.at<uchar>(i, j) = filterblurpoint(newimage, i, j, 5);
-			//}
+	depthOfField(newimage, newimage, refinement_disparitymap);
+	
+	Mat color_img = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_COLOR);
+	Mat dofColor = color_img.clone();
+	depthOfFieldColor(color_img, dofColor, refinement_disparitymap);
+	
+	imshow("Depth of Field", dofColor);
+
+
+	disparity_mouse = refinement_disparitymap.clone();
+	cvNamedWindow("color_img_mouse", 1);
+	cvResizeWindow("Show Image", color_img.cols, color_img.rows);
+	//for mouse event
+	cvSetMouseCallback("color_img_mouse", onMouse, NULL);//設定滑鼠callback函式，改變disparity map 的景深影像
+	imshow("color_img_mouse", color_img_mouse);
+	for (int rowIndex = 0; rowIndex < firstImage.rows; rowIndex++) {
+		for (int colIndex = 0; colIndex < secondImage.cols; colIndex++) {
+			int which_level = (float)disparity_mouse.at<uchar>(rowIndex, colIndex) / (255.0 / LEVEL);
+			disparity_mouse.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
+			//DisparityMap2.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
 		}
-		cout << endl;
 	}
-	imshow("sense", newimage);
+	imshow("disparity_mouse", disparity_mouse);
+	//for mouse event
+	int key = 0;
+	while (true) {
+		key = cvWaitKey(0);
+		if (key == 27) {
+			break;
+		}
+	}
 
-	//Mat color_img = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_COLOR);
-	//for (int i = 0; i < disparityMap.rows; i++) {
-	//	for (int j = 0; j < disparityMap.cols; j++) {
-	//		if ((float)Refinement.at<uchar>(i, j) <= 80)
-	//		{
-	//			color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 5);
-	//			color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 5);
-	//			color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 5);
 
-	//		}
-	//		if ((float)Refinement.at<uchar>(i, j) > 80 && (float)Refinement.at<uchar>(i, j) <= 100)
-	//		{
-	//			color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 3);
-	//			color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 3);
-	//			color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 3);
-	//		}
-	//	}
-	//	cout << endl;
-	//}
-	//imshow("color_img", color_img);
-	//imshow("checknew", checknew);
-	//for (int i = 0; i < disparityMap.rows; i++) {
-	//	for (int j = 0; j < disparityMap.cols; j++) {
-	//		if ((float)disparityMap.at<uchar>(i, j) == 0)
-	//		{
-	//			cout << (float)disparityMap.at<uchar>(i, j) << " ";
-	//		}
-	//	}
-	//	cout << endl;
-	//}
+	string animationDir = "./Resources/maple_leaves/";
+	vector<string> files = vector<string>();
+	getdir(animationDir, files);
+	droppingleaves(color_img, animationDir, files, refinement_disparitymap);
 
-	waitKey(0);
+	//imshow("sense", newimage);
+
+	//waitKey(0);
 	return 0;
 }

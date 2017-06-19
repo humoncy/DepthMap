@@ -111,18 +111,21 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="gaussian.cpp" />
-    <ClCompile Include="Source.cpp" />
+    <ClCompile Include="postprocessing.cpp" />
+    <ClCompile Include="semi_global_matching_refine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gaussian.h" />
+    <ClInclude Include="postprocessing.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets" Condition="Exists('..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets')" />
     <Import Project="..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets" Condition="Exists('..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets')" />
+    <Import Project="..\packages\dirent.1.13.1\build\native\dirent.targets" Condition="Exists('..\packages\dirent.1.13.1\build\native\dirent.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -130,5 +133,6 @@
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\opencv.win.native.redist.310.3.0\build\native\opencv.win.native.redist.targets'))" />
     <Error Condition="!Exists('..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\opencv.win.native.310.3.0\build\native\opencv.win.native.targets'))" />
+    <Error Condition="!Exists('..\packages\dirent.1.13.1\build\native\dirent.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\dirent.1.13.1\build\native\dirent.targets'))" />
   </Target>
 </Project>
