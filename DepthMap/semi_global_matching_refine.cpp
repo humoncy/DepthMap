@@ -361,6 +361,7 @@ float filterblurpointRGB(Mat newimage, int i, int j, int filtersize, int color) 
 }
 
 int main() {
+
 	Mat firstImage = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 	Mat secondImage = imread("Resources/tsukuba/scene1.row3.col2.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 
@@ -439,8 +440,8 @@ int main() {
 	Mat Refinement = disparityMap.clone();
 	float disimg_mean = mean(disparityMap);
 	int threshold = 1.8;//disparity gradient limit
-	for (int i = 0; i < disparityMap.rows - 1; ++i) {
-		for (int j = 0; j < disparityMap.cols - 1; ++j) {
+	for (int i = 1; i < disparityMap.rows - 1; ++i) {
+		for (int j = 1; j < disparityMap.cols - 1; ++j) {
 			float d1 = disparityMap.at<uchar>(i, j);//the current disparity
 			float up, down, right, left;//save the gradient
 			left = calculateGradient(i - 1, j, disparityMap, d1);
@@ -523,26 +524,27 @@ int main() {
 		cout << endl;
 	}
 	imshow("sense", newimage);
-	Mat color_img = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_COLOR);
-	for (int i = 0; i < disparityMap.rows; i++) {
-		for (int j = 0; j < disparityMap.cols; j++) {
-			if ((float)Refinement.at<uchar>(i, j) <= 80)
-			{
-				color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 5);
-				color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 5);
-				color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 5);
 
-			}
-			if ((float)Refinement.at<uchar>(i, j) > 80 && (float)Refinement.at<uchar>(i, j) <= 100)
-			{
-				color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 3);
-				color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 3);
-				color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 3);
-			}
-		}
-		cout << endl;
-	}
-	imshow("color_img", color_img);
+	//Mat color_img = imread("Resources/tsukuba/scene1.row3.col1.jpg", CV_LOAD_IMAGE_COLOR);
+	//for (int i = 0; i < disparityMap.rows; i++) {
+	//	for (int j = 0; j < disparityMap.cols; j++) {
+	//		if ((float)Refinement.at<uchar>(i, j) <= 80)
+	//		{
+	//			color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 5);
+	//			color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 5);
+	//			color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 5);
+
+	//		}
+	//		if ((float)Refinement.at<uchar>(i, j) > 80 && (float)Refinement.at<uchar>(i, j) <= 100)
+	//		{
+	//			color_img.at<Vec3b>(i, j)[0] = filterblurpoint(color_img, i, j, 3);
+	//			color_img.at<Vec3b>(i, j)[1] = filterblurpoint(color_img, i, j, 3);
+	//			color_img.at<Vec3b>(i, j)[2] = filterblurpoint(color_img, i, j, 3);
+	//		}
+	//	}
+	//	cout << endl;
+	//}
+	//imshow("color_img", color_img);
 	//imshow("checknew", checknew);
 	//for (int i = 0; i < disparityMap.rows; i++) {
 	//	for (int j = 0; j < disparityMap.cols; j++) {

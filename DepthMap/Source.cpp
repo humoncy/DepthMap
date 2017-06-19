@@ -80,9 +80,11 @@ int main() {
 		for (int colIndex = 0; colIndex < SrcImg1.cols; colIndex++) {
 			int which_level = (float)DisparityMap.at<uchar>(rowIndex, colIndex) / (255.0 / LEVEL);
 			DisparityMap.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
+			//DisparityMap2.at<uchar>(rowIndex, colIndex) = ((float)which_level / LEVEL) * 255.0;
 		}
 	}
-
+	medianBlur(DisparityMap2, DisparityMap2, 5);
+	
 	imshow("Disparity Map", DisparityMap);
 	imshow("Disparity Map DP", DisparityMap2);
 	imwrite("Resources/tsukuba/disparity map.jpg", DisparityMap);
@@ -300,9 +302,10 @@ void matchingDP(int windowsize,  Mat SrcImg1, Mat SrcImg2, Mat & DisparityMap)
 		for (int i = m + 1; i < SrcImg1.cols - m - 1; i++) {
 			original_disparitiy.at<int>(scanline, leftpixel) = disparity;
 			if (DPtable2.at<int>(leftpixel, rigthpixel) == none) {
+				if (leftpixel == m + 1)
+					break;
 				cout << "Something wrong!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
-				//original_disparitiy.at<int>(scanline, leftpixel) = DISPARITY_RANGE;
-				//break;
+				cout << "(" << leftpixel << "," << rigthpixel << ")" << endl;
 			}
 			if (DPtable2.at<int>(leftpixel, rigthpixel) == left) {
 				--rigthpixel;
